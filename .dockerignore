@@ -1,0 +1,11 @@
+﻿target/
+.git/
+.gitignore
+*.log
+*.md
+.vscode/
+.idea/
+mvnw
+mvnw.cmd
+run.log
+cookies.txt

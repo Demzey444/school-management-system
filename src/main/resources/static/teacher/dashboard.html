@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Teacher Dashboard — SMS</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+(async () => {
+  const user = await requireRole('TEACHER');
+  if (!user) return;
+  const container = renderLayout(user);
+
+  container.innerHTML = `
+    <div class="page-header"><div><h1>Teacher Dashboard</h1><p>Welcome, ${user.fullName}</p></div></div>
+    <div id="stats" class="stat-grid">Loading…</div>
+    <div class="card"><h3 style="margin-bottom:12px;">My Subjects</h3><div id="subjects">…</div></div>
+    <div class="card"><h3 style="margin-bottom:12px;">My Classes</h3><div id="classes">…</div></div>
+  `;
+
+  try {
+    const d = await API.get('/api/dashboard/teacher');
+    document.getElementById('stats').innerHTML = `
+      <div class="stat-card"><div class="stat-label">My Subjects</div><div class="stat-value">${d.mySubjects}</div></div>
+      <div class="stat-card"><div class="stat-label">My Classes</div><div class="stat-value">${d.myClasses}</div></div>
+    `;
+    document.getElementById('subjects').innerHTML = d.subjects.length
+      ? `<ul style="list-style:none;">${d.subjects.map(s => `<li style="padding:6px 0;">📘 <strong>${s.code}</strong> — ${s.name} (${s.className||'—'})</li>`).join('')}</ul>`
+      : '<p class="empty-state">No subjects assigned.</p>';
+    document.getElementById('classes').innerHTML = d.classes.length
+      ? `<ul style="list-style:none;">${d.classes.map(c => `<li style="padding:6px 0;">🏫 <strong>${c.name}</strong> (Level ${c.level||'—'})</li>`).join('')}</ul>`
+      : '<p class="empty-state">No classes assigned.</p>';
+  } catch (e) {
+    document.getElementById('stats').innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+  }
+})();
+</script>
+</body>
+</html>

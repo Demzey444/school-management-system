@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Attendance — SMS</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+let allClasses = [];
+
+(async () => {
+  const user = await requireRole('TEACHER');
+  if (!user) return;
+  const container = renderLayout(user);
+
+  container.innerHTML = `
+    <div class="page-header">
+      <div><h1>Attendance</h1><p>Record attendance for a class</p></div>
+    </div>
+    <div class="card">
+      <div class="form-row">
+        <div class="form-group"><label>Class</label>
+          <select id="classSelect"><option value="">— Select —</option></select></div>
+        <div class="form-group"><label>Date</label>
+          <input type="date" id="dateInput" value="${new Date().toISOString().slice(0,10)}"></div>
+      </div>
+      <button class="btn btn-primary" onclick="loadStudents()">Load Students</button>
+    </div>
+    <div id="studentsArea"></div>
+  `;
+
+  try {
+    allClasses = await API.get('/api/classes');
+    document.getElementById('classSelect').innerHTML =
+      '<option value="">— Select —</option>' +
+      allClasses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  } catch (e) {
+    alert(e.message);
+  }
+})();
+
+async function loadStudents() {
+  const classId = document.getElementById('classSelect').value;
+  const date = document.getElementById('dateInput').value;
+  if (!classId || !date) { alert('Pick a class and date'); return; }
+
+  const area = document.getElementById('studentsArea');
+  area.innerHTML = 'Loading…';
+
+  try {
+    const students = await API.get('/api/students?classId=' + classId);
+    const existing = await API.get('/api/attendance?classId=' + classId + '&date=' + date);
+    const existingMap = {};
+    existing.forEach(a => existingMap[a.studentId] = a);
+
+    if (!students.length) {
+      area.innerHTML = '<div class="empty-state">No students in this class.</div>';
+      return;
+    }
+
+    area.innerHTML = `
+      <div class="card">
+        <h3 style="margin-bottom:12px;">Students — ${date}</h3>
+        <table>
+          <thead><tr><th>Admission #</th><th>Name</th><th>Status</th></tr></thead>
+          <tbody>
+            ${students.map(s => {
+              const cur = existingMap[s.id] ? existingMap[s.id].status : '';
+              return `<tr>
+                <td>${s.admissionNumber}</td>
+                <td>${s.fullName}</td>
+                <td>
+                  <label style="margin-right:12px;"><input type="radio" name="st_${s.id}" value="PRESENT" ${cur==='PRESENT'?'checked':''}> Present</label>
+                  <label><input type="radio" name="st_${s.id}" value="ABSENT" ${cur==='ABSENT'?'checked':''}> Absent</label>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+        <div class="modal-actions">
+          <button class="btn btn-primary" onclick="saveAll()">Save Attendance</button>
+        </div>
+      </div>
+    `;
+    window._students = students;
+  } catch (e) {
+    area.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+  }
+}
+
+async function saveAll() {
+  const classId = document.getElementById('classSelect').value;
+  const date = document.getElementById('dateInput').value;
+  const entries = [];
+  (window._students || []).forEach(s => {
+    const checked = document.querySelector(`input[name="st_${s.id}"]:checked`);
+    if (checked) entries.push({ studentId: s.id, status: checked.value, remark: '' });
+  });
+  if (!entries.length) { alert('Mark at least one student'); return; }
+
+  try {
+    await API.post('/api/attendance/bulk', { classId, date, entries });
+    alert('Attendance saved.');
+    loadStudents();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+</script>
+</body>
+</html>

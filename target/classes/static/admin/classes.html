@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Classes — SMS</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+let allClasses = [];
+let allTeachers = [];
+
+(async () => {
+  const user = await requireRole('ADMIN');
+  if (!user) return;
+  const container = renderLayout(user);
+
+  container.innerHTML = `
+    <div class="page-header">
+      <div><h1>Classes</h1><p>Manage school classes</p></div>
+      <button class="btn btn-primary" onclick="openModal()">+ Add Class</button>
+    </div>
+    <div class="table-wrapper"><div id="tableArea">Loading…</div></div>
+    <div id="modalArea"></div>
+  `;
+
+  await loadData();
+})();
+
+async function loadData() {
+  try {
+    allClasses = await API.get('/api/classes');
+    allTeachers = await API.get('/api/teachers');
+    render();
+  } catch (e) {
+    document.getElementById('tableArea').innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+  }
+}
+
+function render() {
+  const area = document.getElementById('tableArea');
+  if (!allClasses.length) {
+    area.innerHTML = '<div class="empty-state">No classes yet.</div>';
+    return;
+  }
+  area.innerHTML = `
+    <table>
+      <thead><tr><th>Name</th><th>Level</th><th>Capacity</th><th>Class Teacher</th><th>Actions</th></tr></thead>
+      <tbody>
+        ${allClasses.map(c => `
+          <tr>
+            <td>${c.name}</td>
+            <td>${c.level||'—'}</td>
+            <td>${c.capacity||'—'}</td>
+            <td>${c.classTeacherName||'—'}</td>
+            <td class="row-flex">
+              <button class="btn btn-sm btn-secondary" onclick='editClass(${JSON.stringify(c).replace(/'/g,"&apos;")})'>Edit</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteClass('${c.id}','${c.name}')">Delete</button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function openModal(c) {
+  const cls = c || {};
+  const isEdit = !!cls.id;
+  document.getElementById('modalArea').innerHTML = `
+    <div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <h2>${isEdit ? 'Edit' : 'Add'} Class</h2>
+        <div id="modalAlert"></div>
+        <form id="classForm">
+          <div class="form-row">
+            <div class="form-group"><label>Class Name</label>
+              <input name="name" value="${cls.name||''}" required></div>
+            <div class="form-group"><label>Level</label>
+              <input name="level" value="${cls.level||''}"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Capacity</label>
+              <input type="number" name="capacity" min="1" value="${cls.capacity||''}"></div>
+            <div class="form-group"><label>Class Teacher</label>
+              <select name="classTeacherId">
+                <option value="">— None —</option>
+                ${allTeachers.map(t => `<option value="${t.id}" ${cls.classTeacherId===t.id?'selected':''}>${t.fullName}</option>`).join('')}
+              </select></div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">${isEdit ? 'Save' : 'Create'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.getElementById('classForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const form = new FormData(ev.target);
+    const body = {
+      name: form.get('name'),
+      level: form.get('level') || null,
+      capacity: form.get('capacity') ? parseInt(form.get('capacity')) : null,
+      classTeacherId: form.get('classTeacherId') || null
+    };
+    try {
+      if (isEdit) await API.put('/api/classes/' + cls.id, body);
+      else await API.post('/api/classes', body);
+      closeModal(); await loadData();
+    } catch (e) {
+      document.getElementById('modalAlert').innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+    }
+  });
+}
+function editClass(c) { openModal(c); }
+function closeModal() { document.getElementById('modalArea').innerHTML = ''; }
+async function deleteClass(id, name) {
+  if (!confirm(`Delete class "${name}"?`)) return;
+  try { await API.delete('/api/classes/' + id); await loadData(); }
+  catch (e) { alert(e.message); }
+}
+</script>
+</body>
+</html>

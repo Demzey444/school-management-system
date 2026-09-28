@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>My Attendance — SMS</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+(async () => {
+  const user = await requireRole('STUDENT');
+  if (!user) return;
+  const container = renderLayout(user);
+
+  container.innerHTML = `
+    <div class="page-header">
+      <div><h1>My Attendance</h1><p>Attendance history and summary</p></div>
+    </div>
+    <div id="summary" class="stat-grid">Loading…</div>
+    <div class="card"><h3 style="margin-bottom:12px;">Attendance History</h3><div id="history">…</div></div>
+  `;
+
+  try {
+    const user = await getCurrentUser();
+    const summary = await API.get(`/api/attendance/summary?studentId=${user.profileId}`);
+    document.getElementById('summary').innerHTML = `
+      <div class="stat-card"><div class="stat-label">Present</div><div class="stat-value" style="color:#16a34a;">${summary.present}</div></div>
+      <div class="stat-card"><div class="stat-label">Absent</div><div class="stat-value" style="color:#dc2626;">${summary.absent}</div></div>
+      <div class="stat-card"><div class="stat-label">Total Days</div><div class="stat-value">${summary.total}</div></div>
+      <div class="stat-card"><div class="stat-label">Percentage</div><div class="stat-value">${summary.percentage}%</div></div>
+    `;
+
+    const records = await API.get(`/api/attendance?studentId=${user.profileId}`);
+    const el = document.getElementById('history');
+    if (!records.length) {
+      el.innerHTML = '<p class="empty-state">No attendance records yet.</p>';
+    } else {
+      el.innerHTML = `
+        <table>
+          <thead><tr><th>Date</th><th>Status</th><th>Remark</th></tr></thead>
+          <tbody>
+            ${records.map(a => `
+              <tr>
+                <td>${a.date}</td>
+                <td><span class="badge badge-${a.status.toLowerCase()}">${a.status}</span></td>
+                <td>${a.remark||'—'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+  } catch (e) {
+    document.getElementById('summary').innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+  }
+})();
+</script>
+</body>
+</html>

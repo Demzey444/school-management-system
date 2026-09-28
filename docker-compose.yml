@@ -1,0 +1,34 @@
+﻿version: '3.8'
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: sms-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - sms-net
+
+  app:
+    build: .
+    container_name: sms-app
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongo:27017/school_management
+      SPRING_PROFILES_ACTIVE: docker
+    networks:
+      - sms-net
+
+volumes:
+  mongo-data:
+
+networks:
+  sms-net:
+    driver: bridge

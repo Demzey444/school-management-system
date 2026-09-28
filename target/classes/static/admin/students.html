@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Students â€” SMS</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+let allStudents = [];
+
+(async () => {
+  const user = await requireRole('ADMIN');
+  if (!user) return;
+  const container = renderLayout(user);
+
+  container.innerHTML = `
+    <div class="page-header">
+      <div><h1>Students</h1><p>Manage student records</p></div>
+      <button class="btn btn-primary" onclick="openModal()">+ Add Student</button>
+    </div>
+    <div class="toolbar">
+      <input type="text" id="search" placeholder="Search by name, admission number, or emailâ€¦">
+      <select id="classFilter"><option value="">All classes</option></select>
+    </div>
+    <div class="table-wrapper"><div id="tableArea">Loadingâ€¦</div></div>
+    <div id="modalArea"></div>
+  `;
+
+  document.getElementById('search').addEventListener('input', render);
+  document.getElementById('classFilter').addEventListener('change', render);
+
+  await loadData();
+})();
+
+async function loadData() {
+  try {
+    allStudents = await API.get('/api/students');
+    const classes = await API.get('/api/classes');
+    const filter = document.getElementById('classFilter');
+    filter.innerHTML = '<option value="">All classes</option>' +
+      classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    render();
+  } catch (e) {
+    document.getElementById('tableArea').innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+  }
+}
+
+function render() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const cf = document.getElementById('classFilter').value;
+  let list = allStudents;
+  if (q) list = list.filter(s =>
+    (s.fullName||'').toLowerCase().includes(q) ||
+    (s.admissionNumber||'').toLowerCase().includes(q) ||
+    (s.email||'').toLowerCase().includes(q));
+  if (cf) list = list.filter(s => s.classId === cf);
+
+  const area = document.getElementById('tableArea');
+  if (!list.length) {
+    area.innerHTML = '<div class="empty-state">No students found.</div>';
+    return;
+  }
+  area.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Admission #</th><th>Name</th><th>Email</th><th>Phone</th><th>Gender</th><th>Class</th><th>Actions</th>
+      </tr></thead>
+      <tbody>
+        ${list.map(s => `
+          <tr>
+            <td>${s.admissionNumber||''}</td>
+            <td>${s.fullName||''}</td>
+            <td>${s.email||''}</td>
+            <td>${s.phone||''}</td>
+            <td>${s.gender||''}</td>
+            <td>${s.className||'â€”'}</td>
+            <td class="row-flex">
+              <button class="btn btn-sm btn-secondary" onclick='editStudent(${JSON.stringify(s).replace(/'/g,"&apos;")})'>Edit</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteStudent('${s.id}','${s.fullName}')">Delete</button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+async function openModal(student) {
+  const classes = await API.get('/api/classes');
+  const s = student || {};
+  const isEdit = !!s.id;
+
+  document.getElementById('modalArea').innerHTML = `
+    <div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <h2>${isEdit ? 'Edit' : 'Add'} Student</h2>
+        <div id="modalAlert"></div>
+        <form id="studentForm">
+          <div class="form-row">
+            <div class="form-group"><label>Admission Number</label>
+              <input name="admissionNumber" value="${s.admissionNumber||''}" required></div>
+            <div class="form-group"><label>Full Name</label>
+              <input name="fullName" value="${s.fullName||''}" required></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Email</label>
+              <input type="email" name="email" value="${s.email||''}" required></div>
+            <div class="form-group"><label>Phone</label>
+              <input name="phone" value="${s.phone||''}"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Gender</label>
+              <select name="gender" required>
+                <option value="">â€”</option>
+                <option value="MALE" ${s.gender==='MALE'?'selected':''}>Male</option>
+                <option value="FEMALE" ${s.gender==='FEMALE'?'selected':''}>Female</option>
+              </select></div>
+            <div class="form-group"><label>Date of Birth</label>
+              <input type="date" name="dateOfBirth" value="${s.dateOfBirth||''}" max="${new Date().toISOString().slice(0,10)}"></div>
+          </div>
+          <div class="form-group"><label>Class</label>
+            <select name="classId">
+              <option value="">â€” Unassigned â€”</option>
+              ${classes.map(c => `<option value="${c.id}" ${s.classId===c.id?'selected':''}>${c.name}</option>`).join('')}
+            </select></div>
+          <div class="form-group"><label>Address</label>
+            <input name="address" value="${s.address||''}"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">${isEdit ? 'Save Changes' : 'Create'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('studentForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const form = new FormData(ev.target);
+    const body = {};
+    form.forEach((v,k) => body[k] = v === '' ? null : v);
+
+    try {
+      if (isEdit) {
+        await API.put('/api/students/' + s.id, body);
+      } else {
+        await API.post('/api/students', body);
+      }
+      closeModal();
+      await loadData();
+    } catch (e) {
+      document.getElementById('modalAlert').innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+    }
+  });
+}
+
+function editStudent(s) { openModal(s); }
+function closeModal() { document.getElementById('modalArea').innerHTML = ''; }
+
+async function deleteStudent(id, name) {
+  if (!confirm(`Delete student "${name}"?`)) return;
+  try {
+    await API.delete('/api/students/' + id);
+    await loadData();
+  } catch (e) { alert(e.message); }
+}
+</script>
+</body>
+</html>

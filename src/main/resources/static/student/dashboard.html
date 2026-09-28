@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Student Dashboard — SMS</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<script src="/js/api.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+(async () => {
+  const user = await requireRole('STUDENT');
+  if (!user) return;
+  const container = renderLayout(user);
+
+  container.innerHTML = `
+    <div class="page-header"><div><h1>My Dashboard</h1><p>Welcome, ${user.fullName}</p></div></div>
+    <div id="stats" class="stat-grid">Loading…</div>
+    <div class="card"><h3 style="margin-bottom:12px;">Recent Results</h3><div id="recent">…</div></div>
+  `;
+
+  try {
+    const d = await API.get('/api/dashboard/student');
+    document.getElementById('stats').innerHTML = `
+      <div class="stat-card"><div class="stat-label">Admission Number</div><div class="stat-value" style="font-size:18px;">${d.admissionNumber}</div></div>
+      <div class="stat-card"><div class="stat-label">Class</div><div class="stat-value" style="font-size:22px;">${d.className||'—'}</div></div>
+      <div class="stat-card"><div class="stat-label">Results</div><div class="stat-value">${d.myResults}</div></div>
+      <div class="stat-card"><div class="stat-label">Attendance %</div><div class="stat-value">${d.attendancePercentage}%</div></div>
+    `;
+    const el = document.getElementById('recent');
+    if (!d.recentResults || !d.recentResults.length) {
+      el.innerHTML = '<p class="empty-state">No results yet.</p>';
+    } else {
+      el.innerHTML = `
+        <table><thead><tr><th>Subject</th><th>Total</th><th>Grade</th><th>Remark</th></tr></thead>
+        <tbody>${d.recentResults.map(r => `
+          <tr><td>${r.subjectName}</td><td>${r.totalScore}</td>
+          <td><span class="badge badge-grade-${r.grade}">${r.grade}</span></td>
+          <td>${r.remark}</td></tr>
+        `).join('')}</tbody></table>`;
+    }
+  } catch (e) {
+    document.getElementById('stats').innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+  }
+})();
+</script>
+</body>
+</html>
