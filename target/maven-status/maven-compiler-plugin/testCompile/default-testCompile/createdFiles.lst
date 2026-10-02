@@ -1,0 +1,7 @@
+com\niit\sms\service\ClassServiceTest.class
+com\niit\sms\service\SubjectServiceTest.class
+com\niit\sms\service\TeacherServiceTest.class
+com\niit\sms\service\AttendanceServiceTest.class
+com\niit\sms\service\ResultServiceTest.class
+com\niit\sms\service\StudentServiceTest.class
+com\niit\sms\service\GradingServiceTest.class
